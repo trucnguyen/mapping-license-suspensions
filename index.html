@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="tr-TR"><!--<![endif]--><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width">
+
+	</head>
+
+<style type="text/css">
+svg {
+  stroke: black;
+  stroke-width: 0.5px;
+}
+
+.campaignMap {
+	text-align: center;
+	display: table-cell;
+}
+.centered {
+	margin: auto;
+	display: block;
+}
+</style>
+
+<body>
+
+<p>Note that scales are logarithmic.</p>
+	<table class="centered" width="80%" align="center">
+	  <tr>
+	    <th>Suspensions</th>
+	    <th>Other Variable - 
+<select class="target" id="otherVariableDDL">
+    <option value="Pop15Plus">Population in zipcode over 15 years of age</option>
+    <option value="WhiteNH" selected>White</option>
+    <option value="Black">Black</option>
+    <option value="Hisp">Hispanic</option>
+    <option value="Asian">Asian</option>
+    <option value="Other">Other</option>
+    <option value="povrate">Poverty Rate</option>
+    <option value="FTA100">FTA100</option>
+    <option value="FTP100">FTP100</option>
+    <option value="DUIFTAS100">DUIFTAS100</option>
+    <option value="IncK">Average income in thousands</option>
+
+  </select>
+	    </th>
+	  </tr>
+	  <tr>
+	    <td><div class="campaignMap" id='suspensions'></div></td>
+	    <td><div class="campaignMap" id='otherVariable'></div></td>
+	  </tr>
+	</table>
+
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://d3js.org/queue.v1.min.js"></script>
+<script src="http://d3js.org/topojson.v1.min.js"></script>
+<script src="http://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.6.0/underscore-min.js"></script>
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+
+<script>
+(function() {
+/*
+RESOURCES
+ 
+ sfdata.gov
+• Form 460 - Summary Totals: https://data.sfgov.org/Ethics/Campaign-Finance-FPPC-Form-460-Summary-Totals/4tts-fyix
+• Form 460 - Schedule A: https://data.sfgov.org/Ethics/Campaign-Finance-FPPC-Form-460-Schedule-A-Monetary/q66q-d2tr
+• Form 460 - Schedule E: https://data.sfgov.org/Ethics/Campaign-Finance-FPPC-Form-460-Schedule-E-Payments/hc26-j9if
+• Form 461 - Major Donors: https://data.sfgov.org/Ethics/Campaign-Finance-FPPC-Form-461-Major-Donor-and-Ind/86nq-bynj
+• Form 700 - Conflict of Interest Forms: https://data.sfgov.org/Ethics/Statement-of-Economic-Interests-SEI-Form-700-Filin/kg3i-kae6
+
+Shapefiles
+• SF Districts: http://sfgov.maps.arcgis.com/home/item.html?id=b1d929bcfb6c45c8a494e322be35b128
+• SF Zip Codes: https://data.sfgov.org/Geography/Bay-Area-ZIP-Codes-Zipped-Shapefile-Format-/hbza-6v77
+• CA Counties: http://scec.usc.edu/internships/useit/content/california-counties-shapefiles
+• US States: http://www.arcgis.com/home/item.html?id=f7f805eb65eb4ab787a0a3e1116ca7e5
+• Census Block Data: http://www.bayareacensus.ca.gov/small/blockgroup_pldata_shp.zip
+
+Shapefiles to GeoJSON
+• ogr2ogr -f GeoJSON -s_srs EPSG:2227 -t_srs WGS84 geo.json SF_BOS_20120702_nowater.shp
+• ogr2ogr -f GeoJSON -s_srs tl_2010_06075_tabblock10.prj -t_srs WGS84 blocksgeo.json tl_2010_06075_tabblock10.shp
+
+Shapefiles to topojson
+• topojson -o my_topo.json my_geojson.geojson
+*/
+
+
+	function colorScale(x, top) {
+		return 'rgba(0,0,255,' + (x / top).toFixed(2) + ')';
+	}
+
+	var w = 400;
+	var h = 400;
+	var projection = d3.geo.mercator().translate([w / 2, h / 2]).scale([79900]).center([-122.43198394775389, 37.76365837331252]);
+	var path = d3.geo.path().projection(projection);
+
+	function campaignMap(selector, source, toner, columnName) {
+		$(selector).empty();
+		
+		var svg = d3.select(selector).append("svg").attr("width", w).attr("height", h);
+
+		d3.csv(source, function(csv) {
+			// Compute contributions per zip code
+			// Using log scale so big spenders don't obscure the rest
+			var zips = _.pluck(csv, 'ZipCode');
+			var dough = _.map(_.pluck(csv, columnName), function(d) {
+				return parseFloat(d);
+			});
+			var zip2dough = _.object(zips, dough);
+			var topDough = Math.log(_.max(dough));
+
+			d3.json('sf.json', function(json) {
+				var data = topojson.feature(json, json.objects.geo).features;
+				svg.selectAll(".dist").data(data)
+				.enter().append("path").attr("d", path).attr("fill", function(d, i) {
+					var zipCode = d.properties.ZIP;
+					if ( zipCode in zip2dough) {
+						return toner(Math.log(zip2dough[zipCode]), topDough);
+					}
+					return 'none';
+				});
+			});
+		});
+	}
+	
+	campaignMap('#suspensions', 'data.csv', colorScale, 'FTAFTPS100');
+	campaignMap('#otherVariable', 'data.csv', colorScale, 'WhiteNH');
+
+	$("#otherVariableDDL").change(function () {
+            var selectedText = $(this).find("option:selected").text();
+            var selectedValue = $(this).val();
+            campaignMap('#otherVariable', 'data.csv', colorScale, selectedValue);
+	});
+
+}());
+</script>
+
+</body>
+</html>
